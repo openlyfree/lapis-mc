@@ -1,0 +1,27 @@
+package io.github.openlyfree;
+
+import io.quarkus.hibernate.panache.PanacheEntity;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Transient;
+
+@Entity
+public class Server extends PanacheEntity {
+  public String name;
+  @Transient
+  public int pid;
+  @Enumerated(EnumType.STRING)
+  public LoaderType loaderType;
+  @Enumerated(EnumType.STRING)
+  public ServerState state;
+  public String version; // maybe a version class later?
+
+  public enum LoaderType {
+    FABRIC, VANILLA, PAPER// in future custom type maybe?
+  }
+
+  public enum ServerState {
+    UP, DOWN, INIT, ERR
+  }
+}
