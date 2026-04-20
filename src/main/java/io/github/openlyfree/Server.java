@@ -18,7 +18,7 @@ public class Server extends PanacheEntity {
   public String version; // maybe a version class later?
 
   public enum LoaderType {
-    FABRIC, VANILLA, PAPER// in future custom type maybe?
+    FABRIC, PAPER// in future custom type maybe?
   }
 
   public enum ServerState {
