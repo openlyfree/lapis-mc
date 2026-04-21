@@ -1,4 +1,4 @@
-package io.github.openlyfree.loader;
+package io.github.openlyfree.services.loader;
 
 import java.io.InputStream;
 import java.time.OffsetDateTime;

@@ -1,4 +1,4 @@
-package io.github.openlyfree;
+package io.github.openlyfree.models;
 
 import io.quarkus.hibernate.panache.PanacheEntity;
 import jakarta.persistence.Entity;
