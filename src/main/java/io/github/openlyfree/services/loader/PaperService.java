@@ -1,6 +1,5 @@
 package io.github.openlyfree.services.loader;
 
-import java.io.InputStream;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -77,9 +76,5 @@ public interface PaperService {
   @GET
   @Path("/versions/{version}/builds/latest")
   PaperBuildResponse getBuildData(@PathParam("version") String version);
-
-  @GET
-  @Path("{url}")
-  InputStream downloadJar(@PathParam("url") String url);
 
 }

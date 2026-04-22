@@ -1,6 +1,7 @@
 package io.github.openlyfree.services;
 
 import java.io.InputStream;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -15,6 +16,9 @@ import io.github.openlyfree.services.loader.PaperService;
 import io.quarkus.virtual.threads.VirtualThreads;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Response.Status;
 
 @ApplicationScoped
 public class ServerService {
@@ -44,14 +48,27 @@ public class ServerService {
             .anyMatch(v -> v.version().id().equals(server.version)))
           yield Optional.empty();
 
-        yield Optional.ofNullable(paper.downloadJar(server.version));
+        PaperService.PaperBuildResponse buildData = paper.getBuildData(server.version);
+        PaperService.Download serverDownload = buildData.downloads().get("server:default");
+
+        if (serverDownload == null || serverDownload.url() == null || serverDownload.url().isBlank()) {
+          yield Optional.empty();
+        }
+
+        try {
+          yield Optional.of(URI.create(serverDownload.url()).toURL().openStream());
+        } catch (Exception e) {
+          throw new WebApplicationException("Paper download URL could not be opened: " + e.getMessage(),
+              Status.BAD_GATEWAY);
+        }
       }
     };
   }
 
   public void downloadJar(Server server) {
     server.state = Server.ServerState.INIT;
-    try (InputStream in = getDownJarStream(server).orElseThrow(() -> new RuntimeException("Version not found"))) {
+    try (InputStream in = getDownJarStream(server)
+        .orElseThrow(() -> new NotFoundException("Version not found: " + server.version))) {
 
       Path serverDir = Path.of("server_jars");
       if (Files.notExists(serverDir)) {
@@ -63,6 +80,15 @@ public class ServerService {
           server.version.replace(".", "_"));
 
       Files.copy(in, serverDir.resolve(fileName), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+    } catch (NotFoundException e) {
+      server.state = Server.ServerState.ERR;
+      throw e;
+    } catch (WebApplicationException e) {
+      server.state = Server.ServerState.ERR;
+      if (e.getResponse() != null && e.getResponse().getStatus() == 404) {
+        throw new NotFoundException("No server artifact found for " + server.loaderType + " " + server.version, e);
+      }
+      throw new WebApplicationException("Failed to download server artifact from upstream", Status.BAD_GATEWAY);
     } catch (Exception e) {
       server.state = Server.ServerState.ERR;
       throw new RuntimeException("Failed to download JAR for " + server.name, e);
