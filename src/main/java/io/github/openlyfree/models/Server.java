@@ -1,6 +1,7 @@
 package io.github.openlyfree.models;
 
 import io.quarkus.hibernate.panache.PanacheEntity;
+import io.quarkus.hibernate.panache.PanacheRepository;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -23,5 +24,9 @@ public class Server extends PanacheEntity {
 
   public enum ServerState {
     UP, DOWN, INIT, ERR
+  }
+
+  public interface Repo extends PanacheRepository<Server> {
+
   }
 }
