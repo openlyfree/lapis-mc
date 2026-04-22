@@ -9,6 +9,12 @@ import jakarta.persistence.Transient;
 
 @Entity
 public class Server extends PanacheEntity {
+  public Server(String name, String version, String loader) {
+    this.name = name;
+    this.version = version;
+    this.loaderType = LoaderType.valueOf(loader.toUpperCase());
+  }
+
   public String name;
   @Transient
   public int pid;
