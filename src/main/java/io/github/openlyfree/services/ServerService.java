@@ -50,6 +50,7 @@ public class ServerService {
   }
 
   public void downloadJar(Server server) {
+    server.state = Server.ServerState.INIT;
     try (InputStream in = getDownJarStream(server).orElseThrow(() -> new RuntimeException("Version not found"))) {
 
       Path serverDir = Path.of("server_jars");
@@ -63,8 +64,10 @@ public class ServerService {
 
       Files.copy(in, serverDir.resolve(fileName), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
     } catch (Exception e) {
+      server.state = Server.ServerState.ERR;
       throw new RuntimeException("Failed to download JAR for " + server.name, e);
     }
+    server.state = Server.ServerState.DOWN;
   }
 
   @VirtualThreads
@@ -75,8 +78,10 @@ public class ServerService {
         server.version.replace(".", "_"));
     Path jarPath = serverDir.resolve(fileName).toAbsolutePath();
 
-    if (Files.notExists(jarPath))
-      downloadJar(server);
+    if (Files.notExists(jarPath)) {
+      server.state = Server.ServerState.ERR;
+      throw new IllegalAccessError("JAR file not found for server: " + server.name);
+    }
 
     try {
       ProcessBuilder pb = new ProcessBuilder("java", "-jar", jarPath.toString(), "nogui");
@@ -88,17 +93,22 @@ public class ServerService {
       pb.directory(f);
       running.put(server.name, pb.start());
     } catch (Exception e) {
+      server.state = Server.ServerState.ERR;
       throw new RuntimeException("Failed to run server " + server.name, e);
     }
+
+    server.state = Server.ServerState.UP;
   }
 
   @VirtualThreads
-  public void stopServer(Server name) {
-    Process p = running.get(name.name);
+  public void stopServer(Server server) {
+    Process p = running.get(server.name);
     if (p != null) {
       p.destroy();
-      running.remove(name.name);
+      running.remove(server.name);
     }
+
+    server.state = Server.ServerState.DOWN;
   }
 
 }
