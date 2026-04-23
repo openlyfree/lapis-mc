@@ -1,5 +1,6 @@
 package io.github.openlyfree.services;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.file.Files;
@@ -11,11 +12,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import io.github.openlyfree.models.Server;
+import io.github.openlyfree.resources.ServerConsoleSocket;
 import io.github.openlyfree.services.loader.FabricService;
 import io.github.openlyfree.services.loader.PaperService;
 import io.quarkus.virtual.threads.VirtualThreads;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response.Status;
@@ -28,8 +32,10 @@ public class ServerService {
   @Inject
   @RestClient
   PaperService paper;
+  @Inject
+  Server.Repo serpo;
 
-  ConcurrentHashMap<String, Process> running = new ConcurrentHashMap<>();
+  public ConcurrentHashMap<String, Process> running = new ConcurrentHashMap<>();
 
   private Optional<InputStream> getDownJarStream(Server server) {
     return switch (server.loaderType) {
@@ -65,6 +71,7 @@ public class ServerService {
     };
   }
 
+  @Transactional
   public void downloadJar(Server server) {
     server.state = Server.ServerState.INIT;
     try (InputStream in = getDownJarStream(server)
@@ -97,6 +104,7 @@ public class ServerService {
   }
 
   @VirtualThreads
+  @Transactional
   public void runServer(Server server) {
     Path serverDir = Path.of("server_jars");
     String fileName = String.format("%s_%s.jar",
@@ -122,11 +130,22 @@ public class ServerService {
       server.state = Server.ServerState.ERR;
       throw new RuntimeException("Failed to run server " + server.name, e);
     }
-
+    Thread.ofVirtual().start(() -> {
+      try (var reader = new java.io.BufferedReader(
+          new java.io.InputStreamReader(running.get(server.name).getInputStream()))) {
+        String line;
+        while ((line = reader.readLine()) != null) {
+          ServerConsoleSocket.broadcast(server.id, line);
+        }
+      } catch (IOException e) {
+        ServerConsoleSocket.broadcast(server.id, "[Lapis] Console stream closed.");
+      }
+    });
     server.state = Server.ServerState.UP;
   }
 
   @VirtualThreads
+  @Transactional
   public void stopServer(Server server) {
     Process p = running.get(server.name);
     if (p != null) {
@@ -135,6 +154,39 @@ public class ServerService {
     }
 
     server.state = Server.ServerState.DOWN;
+  }
+
+  @PreDestroy
+  void onStop() {
+    running.values().forEach(p -> {
+      try {
+        p.getOutputStream().write("stop\n".getBytes());
+        p.getOutputStream().flush();
+
+      } catch (Exception _) {
+        // force shutdown
+        try {
+          p.close();
+        } catch (IOException _) {
+
+        }
+      }
+    });
+  }
+
+  public void sendCommand(long long1, String message) {
+    Process p = running
+        .get(serpo.findByIdOptional(long1).orElseThrow(() -> new IllegalArgumentException("Server not found")).name);
+    if (p != null && p.isAlive()) {
+      try {
+        p.getOutputStream().write((message + "\n").getBytes());
+        p.getOutputStream().flush();
+      } catch (IOException e) {
+        throw new RuntimeException("Failed to send command to server", e);
+      }
+    } else {
+      throw new IllegalStateException("Server is not running");
+    }
   }
 
 }
