@@ -37,6 +37,12 @@ public class ServerService {
 
   public ConcurrentHashMap<String, Process> running = new ConcurrentHashMap<>();
 
+  @Transactional(Transactional.TxType.REQUIRES_NEW)
+  public void updateState(Server server, Server.ServerState state) {
+    server.state = state;
+    serpo.update("state = ?1 where id = ?2", state, server.id);
+  }
+
   private Optional<InputStream> getDownJarStream(Server server) {
     return switch (server.loaderType) {
       case FABRIC -> {
@@ -73,7 +79,8 @@ public class ServerService {
 
   @Transactional
   public void downloadJar(Server server) {
-    server.state = Server.ServerState.INIT;
+
+    updateState(server, Server.ServerState.INIT);
     try (InputStream in = getDownJarStream(server)
         .orElseThrow(() -> new NotFoundException("Version not found: " + server.version))) {
 
@@ -88,19 +95,19 @@ public class ServerService {
 
       Files.copy(in, serverDir.resolve(fileName), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
     } catch (NotFoundException e) {
-      server.state = Server.ServerState.ERR;
+      updateState(server, Server.ServerState.ERR);
       throw e;
     } catch (WebApplicationException e) {
-      server.state = Server.ServerState.ERR;
+      updateState(server, Server.ServerState.ERR);
       if (e.getResponse() != null && e.getResponse().getStatus() == 404) {
         throw new NotFoundException("No server artifact found for " + server.loaderType + " " + server.version, e);
       }
       throw new WebApplicationException("Failed to download server artifact from upstream", Status.BAD_GATEWAY);
     } catch (Exception e) {
-      server.state = Server.ServerState.ERR;
+      updateState(server, Server.ServerState.ERR);
       throw new RuntimeException("Failed to download JAR for " + server.name, e);
     }
-    server.state = Server.ServerState.DOWN;
+    updateState(server, Server.ServerState.DOWN);
   }
 
   @VirtualThreads
@@ -113,7 +120,7 @@ public class ServerService {
     Path jarPath = serverDir.resolve(fileName).toAbsolutePath();
 
     if (Files.notExists(jarPath)) {
-      server.state = Server.ServerState.ERR;
+      updateState(server, Server.ServerState.ERR);
       throw new IllegalAccessError("JAR file not found for server: " + server.name);
     }
 
@@ -127,7 +134,7 @@ public class ServerService {
       pb.directory(f);
       running.put(server.name, pb.start());
     } catch (Exception e) {
-      server.state = Server.ServerState.ERR;
+      updateState(server, Server.ServerState.ERR);
       throw new RuntimeException("Failed to run server " + server.name, e);
     }
     Thread.ofVirtual().start(() -> {
@@ -141,7 +148,7 @@ public class ServerService {
         ServerConsoleSocket.broadcast(server.id, "[Lapis] Console stream closed.");
       }
     });
-    server.state = Server.ServerState.UP;
+    updateState(server, Server.ServerState.UP);
   }
 
   @VirtualThreads
@@ -153,7 +160,7 @@ public class ServerService {
       running.remove(server.name);
     }
 
-    server.state = Server.ServerState.DOWN;
+    updateState(server, Server.ServerState.DOWN);
   }
 
   @PreDestroy
