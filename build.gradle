@@ -19,6 +19,7 @@ dependencies {
     implementation 'io.quarkus:quarkus-arc'
     implementation 'io.quarkus:quarkus-hibernate-orm'
     implementation 'io.quarkus:quarkus-rest'
+    implementation("io.quarkiverse.qute.web:quarkus-qute-web")
     annotationProcessor 'org.hibernate.orm:hibernate-processor'
     testImplementation 'io.quarkus:quarkus-junit'
     testImplementation 'io.rest-assured:rest-assured'
