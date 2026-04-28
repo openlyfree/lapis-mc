@@ -169,14 +169,10 @@ public class ServerService {
       try {
         p.getOutputStream().write("stop\n".getBytes());
         p.getOutputStream().flush();
+      } catch (Exception e) {
 
-      } catch (Exception _) {
-        // force shutdown
-        try {
-          p.close();
-        } catch (IOException _) {
+        p.destroyForcibly();
 
-        }
       }
     });
   }
