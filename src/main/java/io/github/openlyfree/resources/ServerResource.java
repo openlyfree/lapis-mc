@@ -35,22 +35,22 @@ public class ServerResource {
 
   @POST
   @Path("{serverId}/start")
-  public Server startServer(@PathParam("serverId") String serverId) {
+  public Server.ServerState startServer(@PathParam("serverId") String serverId) {
     Server server = serverRepo.findById(Long.parseLong(serverId));
     if (server == null)
       throw new WebApplicationException("Server not found", 404);
     serverService.runServer(server);
-    return server;
+    return server.state;
   }
 
   @POST
   @Path("{serverId}/stop")
-  public Server stopServer(@PathParam("serverId") String serverId) {
+  public Server.ServerState stopServer(@PathParam("serverId") String serverId) {
     Server server = serverRepo.findById(Long.parseLong(serverId));
     if (server == null)
       throw new WebApplicationException("Server not found", 404);
     serverService.stopServer(server);
-    return server;
+    return server.state;
   }
 
   @DELETE
